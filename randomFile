@@ -38,7 +38,6 @@ static char ** path_table;
 int  init_path(void) {
   /* Lab 0: Your code here */ 
   char *path = getenv("PATH"); // will hold addy to  path looking  /usr/lib/lightdm/lightdm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/home/porter/bin
-  //char *path =(char*) "/foo:/bar////";
   char *fullPath =strdup(path); // copy path so we don't get an uh oh 
   char **initSplit;
   if(fullPath == NULL){
@@ -84,22 +83,40 @@ int  init_path(void) {
 
   for(i =0; i< pathCount; i++){
 	  token = initSplit[i];
+	 // printf("%s\n", initSplit[i]);
 	  int l = strlen(token);
-	  if(l ==0){
+	  int trailing = 0;
+	  if(token[0] == '/' && strlen(token) == 1){
 		  continue;
 	  }
-
-	 for(int j =l-1; j >=0; j--){		 
-		 if(token[j] == '/' ){		 
-			 token[j] ='\0';
-		 }else{break;}
+	 for(int j =1; j <= l; j++){		 
+		 if(token[j] == '/' && token[j-1] ==  '/'){
+			if(token[j+1] != -1 && token[j+1] == '/'){
+				continue;
+			}
+			char *sub;
+			path_table[i] = (char *) malloc(sizeof(char) *(l-j));
+			sub = malloc(sizeof(char) *(l-j));
+			memcpy(sub, &token[j], l-j);
+			//strcpy(path_table[i], sub);
+			path_table[i] = strdup(sub);
+//			printf("%p %s\n", path_table[i], path_table[i]);
+//			free(sub);
+			trailing =1;
+		}
+		 
+		 
+		 else if (trailing == 0 && j == l-1) {
+			path_table[i] = malloc(sizeof(char*) *(l+1));
+			//strcpy(path_table[i], token);
+			path_table[i] = strdup(token);
+			//printf("%p %s\n", path_table[i], path_table[i]);
+		}
+	
 	 }
-
- 
-	path_table[i] = (char *) malloc(sizeof(char) *(strlen(token)+1));
-		
-	strcpy(path_table[i], token);
-	 }
+	 
+//	 free(token);
+  }
 
   path_table[pathCount +1 -1] = '\0';
   //printf("%s\n", path_table[0]);
@@ -120,74 +137,4 @@ void print_path_table() {
     printf("Prefix %2d: [%s]\n", i, path_table[i]);
   }
   printf("===== End Path Table =====\n");
-}
-
-/* Given the command listed in args,
- * try to execute it.
- *
- * If the first argument starts with a '.'
- * or a '/', it is an absolute path and can
- * execute as-is.
- *
- * Otherwise, search each prefix in the path_table
- * in order to find the path to the binary.
- *
- * Then fork a child and pass the path and the additional arguments
- * to execve() in the child.  Wait for exeuction to complete
- * before returning.
- *
- * stdin is a file handle to be used for standard in.
- * stdout is a file handle to be used for standard out.
- *
- * If stdin and stdout are not 0 and 1, respectively, they will be
- * closed in the parent process before this function returns.
- *
- * wait, if true, indicates that the parent should wait on the child to finish
- *
- * Returns 0 on success, -errno on failure
- */
-int run_command(char *args[MAX_ARGS], int stdin, int stdout, bool wait) {
-  /* Lab 1: Your code here */
-  int rv = 0;
-  struct stat buf;
-  int status= -1;
-  char *path;
-
-  // check type of path
-  if(*args[0] == '.' || *args[0] == '/'){
-	  path = malloc(sizeof(args[0]));
-	  strcpy(path, args[0]);
-	  status =0;
-  }
-  else{
-	  for (int i = 0; path_table[i]; i++) {
-//	    printf("Prefix %2d: [%s]\n", i, path_table[i]);
-		 path = malloc(sizeof(path_table[i]) +  sizeof(args[0]) +1);
-                 path =strcat(path, path_table[i]);
-		 path = strcat(path, "/"); 
-		 path = strcat(path, args[0]);
-		 //printf("%s\n", path);
-		 if(stat(path, &buf) == 0){
-			status = 0;
-			break;	
-		}
-	}
-  }
-
-  if(status < 0) return -errno; 
-
-  // fork and return pid of child
-  pid_t childFork = fork();
- 
-  if(childFork < 0){
-	  return -errno;
-  }
-  else if (childFork == 0){
-	  	execvp(path, args);
-  }else {
-	  // wait for child
-	  if(wait) waitpid(childFork, &rv, 0);
-  }
-
-  return rv;
 }
